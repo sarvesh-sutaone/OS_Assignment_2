@@ -10,6 +10,9 @@
 #include <pthread.h>
 #define MAX_VERTICES 30
 
+pthread_mutex_t read_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t write_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 struct message{
     long mtype;
     int seq_num;
@@ -77,13 +80,18 @@ void delete_shm(int shmid) {
 void *handleRequest(void *arg){
     Message* msg = (Message*)arg;
 
+    pthread_mutex_lock(&read_mutex);
+
     struct sharedData client_data;
     
     int shmid = create_shm(msg->seq_num);
     read_from_shared_memory(shmid,&client_data);
     
+    pthread_mutex_unlock(&read_mutex);
+
     char fileName[100];
     strcpy(fileName,msg->fname);
+    pthread_mutex_lock(&write_mutex);
     FILE *file = fopen(fileName,"w");
 
     if(file == NULL){
@@ -101,7 +109,7 @@ void *handleRequest(void *arg){
     }
 
     fclose(file);
-
+    pthread_mutex_unlock(&write_mutex);
     // This thread will send back the message to client through message queue.
     if(msg->op_num == 1){
         strcpy(msg->fname,"File created successfully.\n");
@@ -133,6 +141,8 @@ void delete_message_queue(int msgid) {
 }
 
 int main(){
+    pthread_mutex_init(&read_mutex,NULL);
+    pthread_mutex_init(&write_mutex,NULL);
     int msgid = create_message_queue();
     printf("Connection established successfully!\n");
 
@@ -159,4 +169,7 @@ int main(){
         }
         printf("Request Processed\n");
     }
+    pthread_mutex_destroy(&read_mutex);
+    pthread_mutex_destroy(&write_mutex);
+    return 0;
 }

@@ -262,8 +262,12 @@ void *dfsThread(void *args) {
     pthread_exit(NULL);
 }
 
+// Mutex for thread-safe file operations
+pthread_mutex_t fileMutex = PTHREAD_MUTEX_INITIALIZER;
+
 // Function to read graph from a given file
 void readGraphFromFile(const char* filename, int graph[MAX_VERTICES][MAX_VERTICES], int* numNodes) {
+    pthread_mutex_lock(&fileMutex);
     FILE* file = fopen(filename, "r");
     if (file == NULL) {
         perror("Error opening file");
@@ -276,6 +280,7 @@ void readGraphFromFile(const char* filename, int graph[MAX_VERTICES][MAX_VERTICE
         }
     }
     fclose(file);
+    pthread_mutex_unlock(&fileMutex);
 }
 
 // Thread Function which acts as a starting point for DFS and BFS.
@@ -299,7 +304,9 @@ void *starterFunction(void *args){
         for(int i=0;i<MAX_VERTICES;++i){
             traversalResult[i] = 0;
         }
+        pthread_mutex_lock(&fileMutex); // Lock before performing BFS
         BFS(graph,startNode,numNodes,traversalResult);
+        pthread_mutex_unlock(&fileMutex);   // Unlock after performing BFS
         struct message sent_msg;
         sent_msg.mtype = msg->seq_num;
         int msgid = create_message_queue();
@@ -319,7 +326,9 @@ void *starterFunction(void *args){
             dfsRes[i] = 0;
         }
         dfsIndex = 0;
+        pthread_mutex_lock(&fileMutex); // Lock before performing DFS
         dfs(graph,numNodes,startNode-1);
+        pthread_mutex_unlock(&fileMutex);   // Unlock after performing DFS
         int msgid = create_message_queue();
         struct message sent_msg;
         sent_msg.mtype = msg->seq_num;
