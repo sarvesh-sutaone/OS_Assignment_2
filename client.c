@@ -32,8 +32,6 @@ int create_shm(int val){
         exit(EXIT_FAILURE);
     }
 
-    printf("Vlaue of key: %d\n",key);
-
     int shmid = shmget(key,sizeof(struct sharedData),IPC_CREAT|0666);
 
     if(shmid == -1){
@@ -153,7 +151,7 @@ while(1){
             printf("Respone:%s\n",recieved_msg.fname);
 
             // Deleting SHM after the message is received.
-            //delete_shm(shmid);
+            delete_shm(shmid);
         }
 
         else if(operation == 2){// Modify existing
@@ -198,11 +196,11 @@ while(1){
             printf("Response: %s\n",recieved_msg.fname);
 
             // Deleting SHM after the message is received.
-            //delete_shm(shmid);
+            delete_shm(shmid);
         }
 
         else if(operation == 3){// DFS
-            printf("Enter starting vertex:");
+            printf("Enter starting vertex: ");
             int start_vertex;
             scanf("%d",&start_vertex);
 
@@ -231,6 +229,7 @@ while(1){
                 index++;
             }
             printf("\n");
+            delete_shm(shmid);
             
         }
 
@@ -264,6 +263,7 @@ while(1){
                 index++;
             }
             printf("\n");
+            delete_shm(shmid);
         }
 
         else{

@@ -369,23 +369,34 @@ int main(){
         printf("This is Secondary Server 1\n");
         shmid = shmget(key_for_server,sizeof(struct sharedData),0664|IPC_CREAT);
         ss_identifier = 1; // First Secondary Server
-        msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 999, 0);
+        
     }
     else{
         printf("This is Secondary Server 2\n");
         ss_identifier = 2; // Second Secondary Server
-        msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 998, 0);
+        
     }
 
-    pthread_t thread;
-
-    if(pthread_create(&thread,NULL,starterFunction,(void*)&msg) != 0)
+    while(1)
     {
-        perror("Error in creating thread");
-        exit(EXIT_FAILURE);
-    }
+        if(ss_identifier==1)
+        {
+            msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 999, 0);
+        }
+        else if(ss_identifier==2)
+        {
+            msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 998, 0);
+        }
+        pthread_t thread;
 
-    pthread_join(thread,NULL);
+        if(pthread_create(&thread,NULL,starterFunction,(void*)&msg) != 0)
+        {
+            perror("Error in creating thread");
+            exit(EXIT_FAILURE);
+        }
+        pthread_join(thread,NULL);
+    }
+    
     
 }
 
