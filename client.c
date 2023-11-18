@@ -212,8 +212,7 @@ while(1){
             client_data.rows = 0;
             client_data.start_vertex = start_vertex;
 
-            int shmid = 
-            (sequence_number); // Creating SHM 
+            int shmid = create_shm(sequence_number); // Creating SHM 
             write_to_shm(shmid,&client_data);
 
             // Sending Message after storing in SHM.
@@ -223,6 +222,15 @@ while(1){
             }
 
             // Receive message through message queue and delete SHM.
+            struct message recieved_msg;
+            msgrcv(msgqid, &recieved_msg, sizeof(struct message) - sizeof(long), sequence_number, 0);
+            
+            int index = 0;
+            while(recieved_msg.res[index] != 0){
+                printf("%d ",recieved_msg.res[index]);
+                index++;
+            }
+            printf("\n");
             
         }
 
@@ -247,6 +255,15 @@ while(1){
             printf("Message Sent\n");
             // Receieve message through message queue and delete SHM.
 
+            struct message recieved_msg;
+            msgrcv(msgqid, &recieved_msg, sizeof(struct message) - sizeof(long), sequence_number, 0);
+            
+            int index = 0;
+            while(recieved_msg.res[index] != 0){
+                printf("%d ",recieved_msg.res[index]);
+                index++;
+            }
+            printf("\n");
         }
 
         else{

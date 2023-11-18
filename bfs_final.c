@@ -109,8 +109,9 @@ void* BFSLevel(void* args) {
         for (int i = 1; i <= numNodes; i++) {
             if (graph[currentNode - 1][i - 1] == 1 && !visited[i]) {
                 // Enqueue the adjacent node and mark it as visited
-                queue[++(*rear)] = i;
+                queue[*rear] = i;
                 visited[i] = true;
+                ++(*rear);
             }
         }
     }
@@ -130,26 +131,48 @@ void BFS(int graph[MAX_VERTICES][MAX_VERTICES], int startNode, int numNodes) {
 
     // Queue to store nodes for BFS traversal
     int queue[MAX_VERTICES + 1];
-    int front = -1, rear = -1;
+    int front = 0, rear = 0; // Initialize front and rear to 0
 
     // Enqueue the starting node and mark it as visited
-    queue[++rear] = startNode;
+    queue[rear++] = startNode;
     visited[startNode] = true;
 
     while (front < rear) {
-        int currentNode = queue[++front];
-        printf("%d ", currentNode);
+        int levelSize = rear - front; // Number of nodes at the current level
 
-        // Explore adjacent nodes
-        for (int i = 1; i <= numNodes; i++) {
-            if (graph[currentNode - 1][i - 1] == 1 && !visited[i]) {
-                // Enqueue the adjacent node and mark it as visited
-                queue[++rear] = i;
-                visited[i] = true;
+        // Create threads for each level
+        pthread_t threads[levelSize];
+        ThreadArgs threadArgs[levelSize];
+
+        // Create threads for each node at the current level
+        for (int i = 0; i < levelSize; ++i) {
+            threadArgs[i].graph = graph;
+            threadArgs[i].visited = visited;
+            threadArgs[i].queue = queue + front; // Adjust the queue for the current level
+            threadArgs[i].startNode = startNode;
+            threadArgs[i].levelSize = levelSize;
+            threadArgs[i].numNodes = numNodes; // Pass numNodes to the threadArgs
+            threadArgs[i].rear = &rear;        // Pass rear pointer to the threadArgs
+
+            if (pthread_create(&threads[i], NULL, BFSLevel, (void*)&threadArgs[i]) != 0) {
+                fprintf(stderr, "Error creating thread\n");
+                return;
             }
         }
+
+        // Wait for all threads to finish
+        for (int i = 0; i < levelSize; ++i) {
+            if (pthread_join(threads[i], NULL) != 0) {
+                fprintf(stderr, "Error joining thread\n");
+                return;
+            }
+        }
+
+        // Move to the next level in the queue
+        front = rear;
     }
 }
+
 
 
 // Function to read graph from a file
@@ -186,8 +209,10 @@ int main() {
     int seq_num = 4;
     int shmid = create_shm(seq_num);
     struct sharedData client_data;
+    int startNode = 1;
+    int numNodes = 5;
     read_from_shared_memory(shmid,&client_data);
-    int startNode = client_data.start_vertex;
+    //int startNode = client_data.start_vertex;
     BFS(graph, startNode, numNodes);
     printf("\n");
 

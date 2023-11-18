@@ -10,6 +10,10 @@
 #include <stdbool.h>
 #include <pthread.h>
 #define MAX_VERTICES 30
+int visited[MAX_VERTICES];
+int lastVertex; 
+int dfsRes[MAX_VERTICES];
+int dfsIndex;
 
 struct sharedData{
     int flag;
@@ -31,11 +35,17 @@ typedef struct {
     int (*graph)[MAX_VERTICES];
     bool* visited;
     int* queue;
-    int startNode;
-    int levelSize;
-    int numNodes; // New field for the number of nodes
-    int* rear;    // New field for the rear pointer
+    int* front;
+    int* rear;
+    int* traversalResult;
+    int numNodes;
 } ThreadArgs;
+
+struct DFSThreadArgs {
+    int adjMatrix[MAX_VERTICES][MAX_VERTICES];
+    int vCount;
+    int start;
+};
 
 
 int create_shm(int val){
@@ -45,13 +55,11 @@ int create_shm(int val){
         exit(EXIT_FAILURE);
     }
 
-    printf("Vlaue of val: %d\n",val);
-    printf("Vlaue of key: %d\n",key);
 
     int shmid = shmget(key,sizeof(struct sharedData),IPC_CREAT);
 
     if(shmid == -1){
-        perror("Error in shmget y");
+        perror("Error in shmget");
         exit(EXIT_FAILURE);
     }
 
@@ -107,89 +115,176 @@ void delete_message_queue(int msgid) {
 }
 
 // Function to perform Breadth-First Search traversal
-void BFS(int graph[MAX_VERTICES][MAX_VERTICES], int startNode, int numNodes);
+void BFS(int graph[MAX_VERTICES][MAX_VERTICES], int startNode, int numNodes,int* traversalResult);
 
-// Thread function for BFS traversal at a specific level
 void* BFSLevel(void* args) {
     ThreadArgs* threadArgs = (ThreadArgs*)args;
     int (*graph)[MAX_VERTICES] = threadArgs->graph;
     bool* visited = threadArgs->visited;
     int* queue = threadArgs->queue;
-    int startNode = threadArgs->startNode;
-    int levelSize = threadArgs->levelSize;
-    int numNodes = threadArgs->numNodes; // Access numNodes from ThreadArgs
-    int* rear = threadArgs->rear;        // Access rear pointer from ThreadArgs
-
-    for (int levelNode = 0; levelNode < levelSize; ++levelNode) {
-        int currentNode = queue[levelNode];
-        printf("%d ", currentNode);
-
-        // Explore adjacent nodes
+    int* front = threadArgs->front;
+    int* rear = threadArgs->rear;
+    int* traversalResult = threadArgs->traversalResult;
+    int numNodes = threadArgs->numNodes;
+ 
+    while (*front < *rear) {
+        int levelNode = queue[++(*front)];
+        traversalResult[*front] = levelNode;
+ 
         for (int i = 1; i <= numNodes; i++) {
-            if (graph[currentNode - 1][i - 1] == 1 && !visited[i]) {
-                // Enqueue the adjacent node and mark it as visited
+            if (graph[levelNode - 1][i - 1] == 1 && !visited[i]) {
                 queue[++(*rear)] = i;
                 visited[i] = true;
             }
         }
     }
-
-    // Release thread resources
+ 
     pthread_exit(NULL);
 }
 
-void BFS(int graph[MAX_VERTICES][MAX_VERTICES], int startNode, int numNodes) {
-    // Array to keep track of visited nodes
-    bool visited[MAX_VERTICES + 1];
+void initThreadArgs(ThreadArgs* args, int (*graph)[MAX_VERTICES], bool* visited, int* queue, int* front, int* rear, int* traversalResult, int numNodes) {
+    args->graph = graph;
+    args->visited = visited;
+    args->queue = queue;
+    args->front = front;
+    args->rear = rear;
+    args->traversalResult = traversalResult;
+    args->numNodes = numNodes;
+}
 
-    // Initialize all nodes as not visited
+
+
+void BFS(int graph[MAX_VERTICES][MAX_VERTICES], int startNode, int numNodes, int* traversalResult) {
+    bool visited[MAX_VERTICES + 1];
+ 
     for (int i = 0; i <= MAX_VERTICES; i++) {
         visited[i] = false;
     }
-
-    // Queue to store nodes for BFS traversal
+ 
     int queue[MAX_VERTICES + 1];
     int front = -1, rear = -1;
-
-    // Enqueue the starting node and mark it as visited
+ 
     queue[++rear] = startNode;
     visited[startNode] = true;
-
+ 
     while (front < rear) {
-        int currentNode = queue[++front];
-        printf("%d ", currentNode);
-
-        // Explore adjacent nodes
-        for (int i = 1; i <= numNodes; i++) {
-            if (graph[currentNode - 1][i - 1] == 1 && !visited[i]) {
-                // Enqueue the adjacent node and mark it as visited
-                queue[++rear] = i;
-                visited[i] = true;
+        int levelSize = rear - front;
+ 
+        pthread_t threads[levelSize];
+        ThreadArgs threadArgs[levelSize];
+ 
+        for (int levelNode = 0; levelNode < levelSize; ++levelNode) {
+            initThreadArgs(&threadArgs[levelNode], graph, visited, queue, &front, &rear, traversalResult, numNodes);
+            if (pthread_create(&threads[levelNode], NULL, BFSLevel, (void*)&threadArgs[levelNode]) != 0) {
+                perror("Error in creating thread");
+                exit(EXIT_FAILURE);
             }
+        }
+ 
+        for (int levelNode = 0; levelNode < levelSize; ++levelNode) {
+            pthread_join(threads[levelNode], NULL);
         }
     }
 }
 
+// Mutex for thread-safe operations
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+
+// dfs function is defined with three arguments
+void dfs(int adjMatrix[][MAX_VERTICES], int vCount, int start);
+
+// Thread function for DFS traversal
+void *dfsThread(void *args);
+
+// dfs function is defined with three arguments
+void dfs(int adjMatrix[][MAX_VERTICES], int vCount, int start) {
+    pthread_t thread[MAX_VERTICES];  // Maximum possible threads
+    struct DFSThreadArgs *threadArgs[MAX_VERTICES];
+
+    pthread_mutex_lock(&mutex);
+    visited[start] = 1;
+    pthread_mutex_unlock(&mutex);
+
+    int isLeaf = 1;  // Flag to check if the current node is a leaf
+
+    int threadCount = 0;
+
+    for (int i = 0; i < vCount; i++) {
+        if (adjMatrix[start][i] && !visited[i]) {
+            isLeaf = 0;  // If there's an unvisited neighbor, the current node is not a leaf
+
+            // Prepare arguments for the new thread
+            threadArgs[threadCount] = malloc(sizeof(struct DFSThreadArgs));
+            if (threadArgs[threadCount] == NULL) {
+                perror("Memory allocation failed");
+                exit(EXIT_FAILURE);
+            }
+
+            threadArgs[threadCount]->vCount = vCount;
+            threadArgs[threadCount]->start = i;
+            for (int j = 0; j < MAX_VERTICES; j++) {
+                for (int k = 0; k < MAX_VERTICES; k++) {
+                    threadArgs[threadCount]->adjMatrix[j][k] = adjMatrix[j][k];
+                }
+            }
+
+            // Create a new thread for DFS traversal
+            if (pthread_create(&thread[threadCount], NULL, dfsThread, (void *)threadArgs[threadCount]) != 0) {
+                perror("Thread creation failed");
+                exit(EXIT_FAILURE);
+            }
+
+            threadCount++;
+        }
+    }
+
+    // If the current node is a leaf, update the lastVertex variable
+    if (isLeaf) {
+        pthread_mutex_lock(&mutex);
+        lastVertex = start + 1;  // Store 1-based vertex number
+        dfsRes[dfsIndex] = lastVertex;
+        dfsIndex++;
+        pthread_mutex_unlock(&mutex);
+    }
+
+    // Wait for all child threads to finish
+    for (int i = 0; i < threadCount; i++) {
+        if (pthread_join(thread[i], NULL) != 0) {
+            perror("Thread join failed");
+            exit(EXIT_FAILURE);
+        }
+        free(threadArgs[i]);
+    }
+
+    // Backtrack
+    visited[start] = 0;
+}
+
+// Thread function for DFS traversal
+void *dfsThread(void *args) {
+    struct DFSThreadArgs *threadArgs = (struct DFSThreadArgs *)args;
+    dfs(threadArgs->adjMatrix, threadArgs->vCount, threadArgs->start);
+    pthread_exit(NULL);
+}
 
 // Function to read graph from a file
+ 
 void readGraphFromFile(const char* filename, int graph[MAX_VERTICES][MAX_VERTICES], int* numNodes) {
     FILE* file = fopen(filename, "r");
-
+ 
     if (file == NULL) {
         perror("Error opening file");
         exit(EXIT_FAILURE);
     }
-
-    // Read the number of nodes
+ 
     fscanf(file, "%d", numNodes);
-
-    // Read the adjacency matrix
+ 
     for (int i = 0; i < *numNodes; i++) {
         for (int j = 0; j < *numNodes; j++) {
             fscanf(file, "%d", &graph[i][j]);
         }
     }
-
+ 
     fclose(file);
 }
 
@@ -201,20 +296,55 @@ void *starterFunction(void *args){
     char filename[100];
     strcpy(filename,msg->fname);
     readGraphFromFile(filename,graph,&numNodes);
-    printf("%d\n",msg->seq_num);
     int shmid = create_shm(msg->seq_num);
     struct sharedData client_data;
     read_from_shared_memory(shmid,&client_data);
     int startNode = client_data.start_vertex;
-    
-    printf("starting: %d\n",startNode);
 
     if(msg->op_num == 4){
-        BFS(graph,startNode,numNodes);
+        int traversalResult[MAX_VERTICES];
+        for(int i=0;i<MAX_VERTICES;++i){
+            traversalResult[i] = 0;
+        }
+        BFS(graph,startNode,numNodes,traversalResult);
+        struct message sent_msg;
+        sent_msg.mtype = msg->seq_num;
+        for (int i = 0; i < numNodes; i++) {
+            sent_msg.res[i] = traversalResult[i];
+        }
+        int msgid = create_message_queue();
+        if(msgsnd(msgid,&sent_msg,sizeof(struct message) - sizeof(long),0) == -1){
+                perror("Error in msgsnd");
+                exit(EXIT_FAILURE);
+        }
+        printf("%ld %d\n",sent_msg.mtype,msg->seq_num);
+        for(int i=0;i<numNodes;++i){
+            printf("%d ",sent_msg.res[i]);
+        }
+        printf("\n");
     }
 
     if(msg->op_num == 3){
-        // Perform DFS
+        for (int i = 0; i < numNodes; ++i) {
+            visited[i] = 0;
+        }
+
+        for(int i=0;i<MAX_VERTICES;++i){
+            dfsRes[i] = 0;
+        }
+        dfsIndex = 0;
+        dfs(graph,numNodes,startNode-1);
+        int msgid = create_message_queue();
+        printf("\n");
+        struct message sent_msg;
+        sent_msg.mtype = msg->seq_num;
+        for(int i =0;i<MAX_VERTICES;++i){
+            sent_msg.res[i] = dfsRes[i];
+        }
+        if(msgsnd(msgid,&sent_msg,sizeof(struct message) - sizeof(long),0) == -1){
+            perror("Error in msgsnd");
+            exit(EXIT_FAILURE);
+        }
     }
     pthread_exit(NULL);
 }
@@ -259,4 +389,3 @@ int main(){
     
 }
 
-// The above code solves the problem of two secondary servers.

@@ -97,7 +97,7 @@ int main() {
                     perror("Error sending message to secondary server\n");
                     exit(EXIT_FAILURE);
                 }
-                printf("Message sent to secondary server 2\n");
+                printf("Message sent to secondary server 1\n");
             }
         }
     }
