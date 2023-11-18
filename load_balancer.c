@@ -47,23 +47,10 @@ void delete_message_queue(int msgid) {
     printf("Message queue deleted\n");
 }
 
-// Function to forward client requests based on sequence number
-void forward_request(int msgid, struct message *msg) {
-    // Update message type based on Sequence_Number
-    msg->mtype = (msg->seq_num % 2 == 0) ? 998 : 999;
-
-    // Forward the message to the appropriate secondary server
-    if (msgsnd(msgid, &msg, sizeof(struct message) - sizeof(long), 0) == -1) {
-        perror("Error sending message to secondary server");
-        exit(EXIT_FAILURE);
-    }
-}
-
-// Example usage of the load balancer function
 int main() {
     // Create a message queue
     int msgid = create_message_queue();
-    printf("Message id created\n");
+    printf("Connection established succesfully!\n");
 
     // Main loop to handle messages
     while (1) {
@@ -78,7 +65,7 @@ int main() {
             perror("Error sending message to primary server");
             exit(EXIT_FAILURE);
             }
-            printf("Message sent to primary server\n");
+            printf("Message forwarded to primary server\n");
         }
         
         else{ 
@@ -88,7 +75,7 @@ int main() {
                     perror("Error sending message to secondary server");
                     exit(EXIT_FAILURE);
                 }
-                printf("Message sent to secondary server 2\n");
+                printf("Message forwarded to secondary server 2\n");
             }
 
             else{
@@ -97,7 +84,7 @@ int main() {
                     perror("Error sending message to secondary server\n");
                     exit(EXIT_FAILURE);
                 }
-                printf("Message sent to secondary server 1\n");
+                printf("Message forwarded to secondary server 1\n");
             }
         }
     }

@@ -145,7 +145,7 @@ while(1){
                 perror("Error in msgsnd");
                 exit(EXIT_FAILURE);
             }
-            
+            printf("Request sent successfully!\n");
             struct message recieved_msg;
             msgrcv(msgqid, &recieved_msg, sizeof(struct message) - sizeof(long), sequence_number, 0);
             printf("Respone:%s\n",recieved_msg.fname);
@@ -189,11 +189,12 @@ while(1){
                 perror("Error in msgsnd");
                 exit(EXIT_FAILURE);
             }
+            printf("Request sent successfully!\n");
             
             // Receive response from Primary server regarding successful modification and delete SHM.
             struct message recieved_msg;
             msgrcv(msgqid, &recieved_msg, sizeof(struct message) - sizeof(long), sequence_number, 0);
-            printf("Response: %s\n",recieved_msg.fname);
+            printf("Response: \n%s\n",recieved_msg.fname);
 
             // Deleting SHM after the message is received.
             delete_shm(shmid);
@@ -218,11 +219,11 @@ while(1){
                 perror("Error in msgsnd");
                 exit(EXIT_FAILURE);
             }
-
+            printf("Request sent successfully!\n");
             // Receive message through message queue and delete SHM.
             struct message recieved_msg;
             msgrcv(msgqid, &recieved_msg, sizeof(struct message) - sizeof(long), sequence_number, 0);
-            
+            printf("Response: \n");
             int index = 0;
             while(recieved_msg.res[index] != 0){
                 printf("%d ",recieved_msg.res[index]);
@@ -251,12 +252,12 @@ while(1){
                 perror("Error in msgsnd");
                 exit(EXIT_FAILURE);
             }
-            printf("Message Sent\n");
+            printf("Request sent successfully!\n");
             // Receieve message through message queue and delete SHM.
 
             struct message recieved_msg;
             msgrcv(msgqid, &recieved_msg, sizeof(struct message) - sizeof(long), sequence_number, 0);
-            
+            printf("Response: \n");
             int index = 0;
             while(recieved_msg.res[index] != 0){
                 printf("%d ",recieved_msg.res[index]);

@@ -1,3 +1,4 @@
+// Including relevant headers and defining some global variables
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,6 +16,7 @@ int lastVertex;
 int dfsRes[MAX_VERTICES];
 int dfsIndex;
 
+// Structure for data shared in SHM
 struct sharedData{
     int flag;
     int graph[30][30];
@@ -22,6 +24,7 @@ struct sharedData{
     int rows;   
 };
 
+// Structure for data shared in Message Queue
 struct message{
     long mtype;
     int seq_num;
@@ -30,7 +33,7 @@ struct message{
     char fname[100];
 }typedef Message;
 
-
+// Thread Argument Structure for BFS
 typedef struct {
     int (*graph)[MAX_VERTICES];
     bool* visited;
@@ -41,62 +44,59 @@ typedef struct {
     int numNodes;
 } ThreadArgs;
 
+// Thread Argument Structure for DFS
 struct DFSThreadArgs {
     int adjMatrix[MAX_VERTICES][MAX_VERTICES];
     int vCount;
     int start;
 };
 
-
+// Function to create SHM given a value.
 int create_shm(int val){
     key_t key = ftok(".",val);
     if(key == -1){
         perror("Error in ftok");
         exit(EXIT_FAILURE);
     }
-
-
     int shmid = shmget(key,sizeof(struct sharedData),IPC_CREAT);
-
     if(shmid == -1){
         perror("Error in shmget");
         exit(EXIT_FAILURE);
     }
-
     return shmid;
 }
 
+// Function to write in a given SHM
 void write_to_shm(int shmid, struct sharedData* shared_data){
     struct sharedData* shared_mem = (struct sharedData*)shmat(shmid,NULL,0);
-    
     if((void*)shared_mem == (void*)-1){
         perror("Error in shmat");
         exit(EXIT_FAILURE);
     }
-
     memcpy(shared_mem,shared_data,sizeof(struct sharedData));
     shmdt(shared_mem);
 }
 
+// Structure to read in a given SHM.
 void read_from_shared_memory(int shmid, struct sharedData* shared_data) {
-    struct sharedData* shared_mem = (struct sharedData*)shmat(shmid, NULL, 0); 
-
+    struct sharedData* shared_mem = (struct sharedData*)shmat(shmid, NULL, 0);
     if ((void*)shared_mem == (void*)-1) {
         perror("shmat");
         exit(EXIT_FAILURE);
     }
-
     memcpy(shared_data, shared_mem, sizeof(struct sharedData));
-
     shmdt(shared_mem);
 }
 
+// Structure to delete a given SHM.
 void delete_shm(int shmid) {
     if (shmctl(shmid, IPC_RMID, NULL) == -1) {
         perror("Error in shmctl");
         exit(EXIT_FAILURE);
     }
 }
+
+// Function to retreive a message queue with a given key.
 int create_message_queue() {
     key_t key = ftok(".", 'B');
     int msgid = msgget(key, 0666);
@@ -106,6 +106,8 @@ int create_message_queue() {
     }
     return msgid;
 }
+
+// Function to delete message queue with a given message id.
 void delete_message_queue(int msgid) {
     if (msgctl(msgid, IPC_RMID, NULL) == -1) {
         perror("Error deleting message queue");
@@ -117,6 +119,7 @@ void delete_message_queue(int msgid) {
 // Function to perform Breadth-First Search traversal
 void BFS(int graph[MAX_VERTICES][MAX_VERTICES], int startNode, int numNodes,int* traversalResult);
 
+// Function to perform BFS.
 void* BFSLevel(void* args) {
     ThreadArgs* threadArgs = (ThreadArgs*)args;
     int (*graph)[MAX_VERTICES] = threadArgs->graph;
@@ -142,6 +145,7 @@ void* BFSLevel(void* args) {
     pthread_exit(NULL);
 }
 
+// Function to initialise the thread argument structure.
 void initThreadArgs(ThreadArgs* args, int (*graph)[MAX_VERTICES], bool* visited, int* queue, int* front, int* rear, int* traversalResult, int numNodes) {
     args->graph = graph;
     args->visited = visited;
@@ -152,8 +156,7 @@ void initThreadArgs(ThreadArgs* args, int (*graph)[MAX_VERTICES], bool* visited,
     args->numNodes = numNodes;
 }
 
-
-
+// Function which performs BFS
 void BFS(int graph[MAX_VERTICES][MAX_VERTICES], int startNode, int numNodes, int* traversalResult) {
     bool visited[MAX_VERTICES + 1];
  
@@ -190,30 +193,28 @@ void BFS(int graph[MAX_VERTICES][MAX_VERTICES], int startNode, int numNodes, int
 // Mutex for thread-safe operations
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
-// dfs function is defined with three arguments
+// Function to perform DFS
 void dfs(int adjMatrix[][MAX_VERTICES], int vCount, int start);
 
-// Thread function for DFS traversal
+// Thread function for DFS 
 void *dfsThread(void *args);
 
-// dfs function is defined with three arguments
+// Function to perform DFS
 void dfs(int adjMatrix[][MAX_VERTICES], int vCount, int start) {
-    pthread_t thread[MAX_VERTICES];  // Maximum possible threads
+    pthread_t thread[MAX_VERTICES];  
     struct DFSThreadArgs *threadArgs[MAX_VERTICES];
 
     pthread_mutex_lock(&mutex);
     visited[start] = 1;
     pthread_mutex_unlock(&mutex);
 
-    int isLeaf = 1;  // Flag to check if the current node is a leaf
-
+    int isLeaf = 1;  
     int threadCount = 0;
 
     for (int i = 0; i < vCount; i++) {
         if (adjMatrix[start][i] && !visited[i]) {
-            isLeaf = 0;  // If there's an unvisited neighbor, the current node is not a leaf
+            isLeaf = 0;
 
-            // Prepare arguments for the new thread
             threadArgs[threadCount] = malloc(sizeof(struct DFSThreadArgs));
             if (threadArgs[threadCount] == NULL) {
                 perror("Memory allocation failed");
@@ -228,26 +229,22 @@ void dfs(int adjMatrix[][MAX_VERTICES], int vCount, int start) {
                 }
             }
 
-            // Create a new thread for DFS traversal
             if (pthread_create(&thread[threadCount], NULL, dfsThread, (void *)threadArgs[threadCount]) != 0) {
                 perror("Thread creation failed");
                 exit(EXIT_FAILURE);
             }
-
             threadCount++;
         }
     }
 
-    // If the current node is a leaf, update the lastVertex variable
     if (isLeaf) {
         pthread_mutex_lock(&mutex);
-        lastVertex = start + 1;  // Store 1-based vertex number
+        lastVertex = start + 1; 
         dfsRes[dfsIndex] = lastVertex;
         dfsIndex++;
         pthread_mutex_unlock(&mutex);
     }
 
-    // Wait for all child threads to finish
     for (int i = 0; i < threadCount; i++) {
         if (pthread_join(thread[i], NULL) != 0) {
             perror("Thread join failed");
@@ -255,52 +252,48 @@ void dfs(int adjMatrix[][MAX_VERTICES], int vCount, int start) {
         }
         free(threadArgs[i]);
     }
-
-    // Backtrack
     visited[start] = 0;
 }
 
-// Thread function for DFS traversal
+// Thread function for DFS
 void *dfsThread(void *args) {
     struct DFSThreadArgs *threadArgs = (struct DFSThreadArgs *)args;
     dfs(threadArgs->adjMatrix, threadArgs->vCount, threadArgs->start);
     pthread_exit(NULL);
 }
 
-// Function to read graph from a file
- 
+// Function to read graph from a given file
 void readGraphFromFile(const char* filename, int graph[MAX_VERTICES][MAX_VERTICES], int* numNodes) {
     FILE* file = fopen(filename, "r");
- 
     if (file == NULL) {
         perror("Error opening file");
         exit(EXIT_FAILURE);
     }
- 
     fscanf(file, "%d", numNodes);
- 
     for (int i = 0; i < *numNodes; i++) {
         for (int j = 0; j < *numNodes; j++) {
             fscanf(file, "%d", &graph[i][j]);
         }
     }
- 
     fclose(file);
 }
 
+// Thread Function which acts as a starting point for DFS and BFS.
 void *starterFunction(void *args){
     Message* msg = (Message*)args;
     int numNodes;
     int graph[MAX_VERTICES][MAX_VERTICES];
-
     char filename[100];
     strcpy(filename,msg->fname);
+
     readGraphFromFile(filename,graph,&numNodes);
+
     int shmid = create_shm(msg->seq_num);
     struct sharedData client_data;
     read_from_shared_memory(shmid,&client_data);
     int startNode = client_data.start_vertex;
 
+    // BFS
     if(msg->op_num == 4){
         int traversalResult[MAX_VERTICES];
         for(int i=0;i<MAX_VERTICES;++i){
@@ -309,21 +302,14 @@ void *starterFunction(void *args){
         BFS(graph,startNode,numNodes,traversalResult);
         struct message sent_msg;
         sent_msg.mtype = msg->seq_num;
-        for (int i = 0; i < numNodes; i++) {
-            sent_msg.res[i] = traversalResult[i];
-        }
         int msgid = create_message_queue();
         if(msgsnd(msgid,&sent_msg,sizeof(struct message) - sizeof(long),0) == -1){
                 perror("Error in msgsnd");
                 exit(EXIT_FAILURE);
         }
-        printf("%ld %d\n",sent_msg.mtype,msg->seq_num);
-        for(int i=0;i<numNodes;++i){
-            printf("%d ",sent_msg.res[i]);
-        }
-        printf("\n");
     }
 
+    // DFS
     if(msg->op_num == 3){
         for (int i = 0; i < numNodes; ++i) {
             visited[i] = 0;
@@ -335,12 +321,8 @@ void *starterFunction(void *args){
         dfsIndex = 0;
         dfs(graph,numNodes,startNode-1);
         int msgid = create_message_queue();
-        printf("\n");
         struct message sent_msg;
         sent_msg.mtype = msg->seq_num;
-        for(int i =0;i<MAX_VERTICES;++i){
-            sent_msg.res[i] = dfsRes[i];
-        }
         if(msgsnd(msgid,&sent_msg,sizeof(struct message) - sizeof(long),0) == -1){
             perror("Error in msgsnd");
             exit(EXIT_FAILURE);
@@ -349,18 +331,17 @@ void *starterFunction(void *args){
     pthread_exit(NULL);
 }
 
+// Main Function 
 int main(){
     int ss_identifier = -1;
     key_t key_for_server = ftok(".",'s');
-    // int shmid = shmget(key_for_server,sizeof(struct sharedData),0664);
-    // delete_shm(shmid);
     if(key_for_server == -1){
         perror("Error in ftok");
         exit(EXIT_FAILURE);
     }
 
     int msgid = create_message_queue();
-    printf("Message id created\n");
+    printf("Message Queue created\n");
     struct message msg;
 
     int shmid = shmget(key_for_server,sizeof(struct sharedData),0664);
@@ -377,26 +358,19 @@ int main(){
         
     }
 
-    while(1)
-    {
-        if(ss_identifier==1)
-        {
+    while(1){
+        if(ss_identifier==1){
             msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 999, 0);
         }
-        else if(ss_identifier==2)
-        {
+        else if(ss_identifier==2){
             msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 998, 0);
         }
         pthread_t thread;
 
-        if(pthread_create(&thread,NULL,starterFunction,(void*)&msg) != 0)
-        {
+        if(pthread_create(&thread,NULL,starterFunction,(void*)&msg) != 0){
             perror("Error in creating thread");
             exit(EXIT_FAILURE);
         }
         pthread_join(thread,NULL);
     }
-    
-    
 }
-

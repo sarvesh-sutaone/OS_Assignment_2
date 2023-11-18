@@ -78,7 +78,7 @@ void *handleRequest(void *arg){
     Message* msg = (Message*)arg;
 
     struct sharedData client_data;
-    printf("%d\n",msg->seq_num);
+    
     int shmid = create_shm(msg->seq_num);
     read_from_shared_memory(shmid,&client_data);
     
@@ -133,10 +133,8 @@ void delete_message_queue(int msgid) {
 }
 
 int main(){
-    // Assume it receives write request from LB via single queue.
-
     int msgid = create_message_queue();
-    printf("Message id created\n");
+    printf("Connection established successfully!\n");
 
     // Main loop to handle messages
     while (1) 
@@ -144,7 +142,7 @@ int main(){
         struct message msg;
         // Receive message from the queue
         msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 1000, 0);
-        printf("Message read\n");    
+        printf("Request Received\n");    
         pthread_t thread;
 
         if(pthread_create(&thread,NULL,handleRequest,(void*)&msg) != 0)
@@ -155,10 +153,10 @@ int main(){
 
         pthread_join(thread,NULL);
         msg.mtype = msg.seq_num;
-        printf("Return string: %s",msg.fname);
         if (msgsnd(msgid, &msg, sizeof(struct message) - sizeof(long), 0) == -1) {
             perror("Error sending message to client from primary server");
             exit(EXIT_FAILURE);
         }
+        printf("Request Processed\n");
     }
 }
