@@ -78,6 +78,7 @@ void *handleRequest(void *arg){
     Message* msg = (Message*)arg;
 
     struct sharedData client_data;
+    printf("%d\n",msg->seq_num);
     int shmid = create_shm(msg->seq_num);
     read_from_shared_memory(shmid,&client_data);
     
@@ -100,17 +101,17 @@ void *handleRequest(void *arg){
     }
 
     fclose(file);
-    printf("Operation number is :%d\n",msg->op_num);
 
     // This thread will send back the message to client through message queue.
     if(msg->op_num == 1){
-        printf("File created successfully.");
+        strcpy(msg->fname,"File created successfully.\n");
     }
 
     if(msg->op_num == 2){
-        printf("File modified successfully");
+        strcpy(msg->fname,"File modified successfully.\n");
     }
 
+    pthread_exit(NULL);
 
 }
 
@@ -142,7 +143,7 @@ int main(){
     {
         struct message msg;
         // Receive message from the queue
-        msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 2, 0);
+        msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 1000, 0);
         printf("Message read\n");    
         pthread_t thread;
 
@@ -153,5 +154,11 @@ int main(){
         }
 
         pthread_join(thread,NULL);
+        msg.mtype = msg.seq_num;
+        printf("Return string: %s",msg.fname);
+        if (msgsnd(msgid, &msg, sizeof(struct message) - sizeof(long), 0) == -1) {
+            perror("Error sending message to client from primary server");
+            exit(EXIT_FAILURE);
+        }
     }
 }

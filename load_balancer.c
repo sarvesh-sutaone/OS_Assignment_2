@@ -32,7 +32,7 @@ struct message{
 
 int create_message_queue() {
     key_t key = ftok(".", 'B');
-    int msgid = msgget(key, 0666|IPC_CREAT);
+    int msgid = msgget(key, 0664|IPC_CREAT);
     if (msgid == -1) {
         perror("Error creating message queue");
         exit(EXIT_FAILURE);
@@ -50,7 +50,7 @@ void delete_message_queue(int msgid) {
 // Function to forward client requests based on sequence number
 void forward_request(int msgid, struct message *msg) {
     // Update message type based on Sequence_Number
-    msg->mtype = (msg->seq_num % 2 == 0) ? 4 : 3;
+    msg->mtype = (msg->seq_num % 2 == 0) ? 998 : 999;
 
     // Forward the message to the appropriate secondary server
     if (msgsnd(msgid, &msg, sizeof(struct message) - sizeof(long), 0) == -1) {
@@ -69,24 +69,39 @@ int main() {
     while (1) {
         struct message msg;
         // Receive message from the queue
-        msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 1, 0);
+        msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 997, 0);
         printf("Message read with %ld\n",msg.mtype);
-        if(msg.seq_num == 1 || msg.seq_num == 2)
+        if(msg.op_num == 1 || msg.op_num == 2)
         {
-            msg.mtype = 2;
+            msg.mtype = 1000;
             if (msgsnd(msgid, &msg, sizeof(struct message) - sizeof(long), 0) == -1) {
             perror("Error sending message to primary server");
             exit(EXIT_FAILURE);
             }
             printf("Message sent to primary server\n");
         }
-        else if(msg.seq_num == 3 || msg.seq_num == 4)
-        {
-            forward_request(msgid, &msg);
-            printf("Message sent to secondary server 1 and 2\n");
+        
+        else{ 
+            if(msg.seq_num % 2 == 0){
+                msg.mtype = 998;
+                if (msgsnd(msgid, &msg, sizeof(struct message) - sizeof(long), 0) == -1) {
+                    perror("Error sending message to secondary server");
+                    exit(EXIT_FAILURE);
+                }
+                printf("Message sent to secondary server 2\n");
+            }
+
+            else{
+                msg.mtype = 999;
+                if (msgsnd(msgid, &msg, sizeof(struct message) - sizeof(long), 0) == -1) {
+                    perror("Error sending message to secondary server\n");
+                    exit(EXIT_FAILURE);
+                }
+                printf("Message sent to secondary server 2\n");
+            }
         }
     }
-    //delete_message_queue(msgid);
+    delete_message_queue(msgid);
 
     return 0;
 }

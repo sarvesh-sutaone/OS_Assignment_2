@@ -32,7 +32,9 @@ int create_shm(int val){
         exit(EXIT_FAILURE);
     }
 
-    int shmid = shmget(key,sizeof(struct sharedData),IPC_CREAT|0664);
+    printf("Vlaue of key: %d\n",key);
+
+    int shmid = shmget(key,sizeof(struct sharedData),IPC_CREAT|0666);
 
     if(shmid == -1){
         perror("Error in shmget");
@@ -89,134 +91,167 @@ int main(){
         exit(EXIT_FAILURE);
     }
 
-    printf("1. Add a new to graph to the database\n");
-    printf("2. Modify an existing graph of the database.\n");
-    printf("3. Perform DFS on existing graph of the database. \n");
-    printf("4. BFS on existing graph of the database.\n");
-    printf("Enter Sequence Number: ");
-    int sequence_number;
-    scanf("%d",&sequence_number);
-    printf("Enter Operation Number: ");
-    int operation;
-    scanf("%d",&operation);
-    printf("Enter Graph File Name: ");
-    char graph_name[100];
-    scanf("%s",graph_name);
+while(1){
+        printf("1. Add a new to graph to the database\n");
+        printf("2. Modify an existing graph of the database.\n");
+        printf("3. Perform DFS on existing graph of the database. \n");
+        printf("4. BFS on existing graph of the database.\n");
+        printf("Enter Sequence Number: ");
+        int sequence_number;
+        scanf("%d",&sequence_number);
+        printf("Enter Operation Number: ");
+        int operation;
+        scanf("%d",&operation);
+        printf("Enter Graph File Name: ");
+        char graph_name[100];
+        scanf("%s",graph_name);
 
-    Message msg;
-    msg.seq_num =  sequence_number;
-    msg.op_num = operation;
-    msg.mtype = 1;
-    strcpy(msg.fname,graph_name);
-    if(operation == 1){ // Add new graph
-        printf("Enter number of nodes of the graph: ");
-        int num_nodes;
-        scanf("%d",&num_nodes);
-        int **graph = (int**)malloc(MAX_VERTICES*sizeof(int*));
-        for(int i=0;i<num_nodes;++i){
-            graph[i] = (int*)malloc(MAX_VERTICES*sizeof(int));
-        }
-
-        printf("Enter adjacency matrix:\n");
-        for(int i=0;i<num_nodes;++i){
-            for(int j=0;j<num_nodes;++j){
-                scanf("%d",&graph[i][j]);
+        Message msg;
+        msg.seq_num =  sequence_number;
+        msg.op_num = operation;
+        msg.mtype = 997;
+        strcpy(msg.fname,graph_name);
+        if(operation == 1){ // Add new graph
+            printf("Enter number of nodes of the graph: ");
+            int num_nodes;
+            scanf("%d",&num_nodes);
+            int **graph = (int**)malloc(MAX_VERTICES*sizeof(int*));
+            for(int i=0;i<num_nodes;++i){
+                graph[i] = (int*)malloc(MAX_VERTICES*sizeof(int));
             }
-        }
-        
 
-        // Create a SHM and store in it.
-        struct sharedData client_data;
-        client_data.flag = 0; // To indicate this is sent by client.
-        client_data.rows = num_nodes;
-        client_data.start_vertex = -1;
-        for(int i=0;i<num_nodes;++i){
-            for(int j=0;j<num_nodes;++j){
-                client_data.graph[i][j] = graph[i][j];
+            printf("Enter adjacency matrix:\n");
+            for(int i=0;i<num_nodes;++i){
+                for(int j=0;j<num_nodes;++j){
+                    scanf("%d",&graph[i][j]);
+                }
             }
-        }
-        int shmid = create_shm(sequence_number);
-        write_to_shm(shmid,&client_data);
-        
-        //Receieve response from Primary Server regarding Success and delete SHM.
-    }
+            
 
-    else if(operation == 2){// Modify existing
-        printf("Enter number of nodes of the graph: ");
-        int num_nodes;
-        scanf("%d",&num_nodes);
-        int **graph = (int**)malloc(MAX_VERTICES*sizeof(int*));
-        for(int i=0;i<num_nodes;++i){
-            graph[i] = (int*)malloc(MAX_VERTICES*sizeof(int));
-        }
-
-        printf("Enter adjacency matrix:\n");
-        for(int i=0;i<num_nodes;++i){
-            for(int j=0;j<num_nodes;++j){
-                scanf("%d",&graph[i][j]);
+            // Create a SHM and store in it.
+            struct sharedData client_data;
+            client_data.flag = 0; // To indicate this is sent by client.
+            client_data.rows = num_nodes;
+            client_data.start_vertex = -1;
+            for(int i=0;i<num_nodes;++i){
+                for(int j=0;j<num_nodes;++j){
+                    client_data.graph[i][j] = graph[i][j];
+                }
             }
-        }
 
-        // Send to SHM.
-        struct sharedData client_data;
-        client_data.flag = 0; // To indicate this is sent by client.
-        client_data.rows = num_nodes;
-        client_data.start_vertex = -1;
-        for(int i=0;i<num_nodes;++i){
-            for(int j=0;j<num_nodes;++j){
-                client_data.graph[i][j] = graph[i][j];
+            int shmid = create_shm(sequence_number); // Creating SHM 
+            write_to_shm(shmid,&client_data);
+
+            // Sending Message after storing in SHM.
+            if(msgsnd(msgqid,&msg,sizeof(struct message) - sizeof(long),0) == -1){
+                perror("Error in msgsnd");
+                exit(EXIT_FAILURE);
             }
+            
+            struct message recieved_msg;
+            msgrcv(msgqid, &recieved_msg, sizeof(struct message) - sizeof(long), sequence_number, 0);
+            printf("Respone:%s\n",recieved_msg.fname);
+
+            // Deleting SHM after the message is received.
+            //delete_shm(shmid);
         }
-        int shmid = create_shm(sequence_number);
-        write_to_shm(shmid,&client_data);
 
-        // Receive response from Primary server regarding successful modification and delete SHM.
-    }
+        else if(operation == 2){// Modify existing
+            printf("Enter number of nodes of the graph: ");
+            int num_nodes;
+            scanf("%d",&num_nodes);
+            int **graph = (int**)malloc(MAX_VERTICES*sizeof(int*));
+            for(int i=0;i<num_nodes;++i){
+                graph[i] = (int*)malloc(MAX_VERTICES*sizeof(int));
+            }
 
-    else if(operation == 3){// DFS
-        printf("Enter starting vertex:");
-        int start_vertex;
-        scanf("%d",&start_vertex);
+            printf("Enter adjacency matrix:\n");
+            for(int i=0;i<num_nodes;++i){
+                for(int j=0;j<num_nodes;++j){
+                    scanf("%d",&graph[i][j]);
+                }
+            }
 
-        // Send to SHM.
-        struct sharedData client_data;
-        client_data.flag = 0; // To indicate this is sent by client.
-        client_data.rows = 0;
-        client_data.start_vertex = start_vertex;
-        int shmid = create_shm(sequence_number);
-        write_to_shm(shmid,&client_data);
+            // Send to SHM.
+            struct sharedData client_data;
+            client_data.flag = 0; // To indicate this is sent by client.
+            client_data.rows = num_nodes;
+            client_data.start_vertex = -1;
+            for(int i=0;i<num_nodes;++i){
+                for(int j=0;j<num_nodes;++j){
+                    client_data.graph[i][j] = graph[i][j];
+                }
+            }
 
-        // Send message through message queue.
+            int shmid = create_shm(sequence_number); // Creating SHM 
+            write_to_shm(shmid,&client_data);
 
-        // Receive message through message queue.
-    }
+            // Sending Message after storing in SHM.
+            if(msgsnd(msgqid,&msg,sizeof(struct message) - sizeof(long),0) == -1){
+                perror("Error in msgsnd");
+                exit(EXIT_FAILURE);
+            }
+            
+            // Receive response from Primary server regarding successful modification and delete SHM.
+            struct message recieved_msg;
+            msgrcv(msgqid, &recieved_msg, sizeof(struct message) - sizeof(long), sequence_number, 0);
+            printf("Response: %s\n",recieved_msg.fname);
 
-    else if(operation == 4){// BFS
-        printf("Enter starting vertex:");
-        int start_vertex;
-        scanf("%d",&start_vertex);
+            // Deleting SHM after the message is received.
+            //delete_shm(shmid);
+        }
 
-        // Send to SHM.
-        struct sharedData client_data;
-        client_data.flag = 0; // To indicate this is sent by client.
-        client_data.rows = 0;
-        client_data.start_vertex = start_vertex;
-        int shmid = create_shm(sequence_number);
-        write_to_shm(shmid,&client_data);
+        else if(operation == 3){// DFS
+            printf("Enter starting vertex:");
+            int start_vertex;
+            scanf("%d",&start_vertex);
 
-        // Send message through message queue.
+            // Send to SHM.
+            struct sharedData client_data;
+            client_data.flag = 0; // To indicate this is sent by client.
+            client_data.rows = 0;
+            client_data.start_vertex = start_vertex;
 
-        // Receieve message through message queue and delete SHM.
-    }
-    
-    // Sending Message after storing in SHM.
-    if(msgsnd(msgqid,&msg,sizeof(struct message) - sizeof(long),0) == -1){
-        perror("Error in msgsnd");
-        exit(EXIT_FAILURE);
-    }
+            int shmid = 
+            (sequence_number); // Creating SHM 
+            write_to_shm(shmid,&client_data);
 
+            // Sending Message after storing in SHM.
+            if(msgsnd(msgqid,&msg,sizeof(struct message) - sizeof(long),0) == -1){
+                perror("Error in msgsnd");
+                exit(EXIT_FAILURE);
+            }
 
-    else{
-        printf("Invalid Operation");
+            // Receive message through message queue and delete SHM.
+            
+        }
+
+        else if(operation == 4){// BFS
+            printf("Enter starting vertex:");
+            int start_vertex;
+            scanf("%d",&start_vertex);
+
+            // Send to SHM.
+            struct sharedData client_data;
+            client_data.flag = 0; // To indicate this is sent by client.
+            client_data.rows = 0;
+            client_data.start_vertex = start_vertex;
+
+            int shmid = create_shm(sequence_number); // Creating SHM 
+            write_to_shm(shmid,&client_data);
+
+            if(msgsnd(msgqid,&msg,sizeof(struct message) - sizeof(long),0) == -1){
+                perror("Error in msgsnd");
+                exit(EXIT_FAILURE);
+            }
+            printf("Message Sent\n");
+            // Receieve message through message queue and delete SHM.
+
+        }
+
+        else{
+            printf("Invalid Operation");
+            break;
+        }
     }
 }
