@@ -11,10 +11,10 @@
 #define MAX_VERTICES 30
 
 struct message{
+    long mtype;
     int seq_num;
     int op_num;
     int res[100];
-    int mtype;
     char fname[100];
 }typedef Message;
 
@@ -26,13 +26,13 @@ struct sharedData{
 };
 
 int create_shm(int val){
-    key_t key = ftok(".",'a');
+    key_t key = ftok(".",val);
     if(key == -1){
         perror("Error in ftok");
         exit(EXIT_FAILURE);
     }
 
-    int shmid = shmget(key,sizeof(struct sharedData),IPC_CREAT|0664);
+    int shmid = shmget(key,sizeof(struct sharedData),0664);
 
     if(shmid == -1){
         perror("Error in shmget");
@@ -78,7 +78,7 @@ void *handleRequest(void *arg){
     Message* msg = (Message*)arg;
 
     struct sharedData client_data;
-    int shmid = create_shm(1);
+    int shmid = create_shm(msg->seq_num);
     read_from_shared_memory(shmid,&client_data);
     
     char fileName[100];
@@ -100,6 +100,7 @@ void *handleRequest(void *arg){
     }
 
     fclose(file);
+    printf("Operation number is :%d\n",msg->op_num);
 
     // This thread will send back the message to client through message queue.
     if(msg->op_num == 1){
@@ -113,18 +114,44 @@ void *handleRequest(void *arg){
 
 }
 
-int main(){
-    // Assume it receives write request from LB via single queue.
-    Message msg;
-    msg.op_num = 2; // From Msg Queue
-    msg.seq_num = 1; // From Msg Queue
-    strcpy(msg.fname,"G1.txt"); // From Msg Queue
-    pthread_t thread;
-
-    if(pthread_create(&thread,NULL,handleRequest,(void*)&msg) != 0){
-        perror("Error in creating thread");
+int create_message_queue() {
+    key_t key = ftok(".", 'B');
+    int msgid = msgget(key, 0666);
+    if (msgid == -1) {
+        perror("Error creating message queue");
         exit(EXIT_FAILURE);
     }
+    return msgid;
+}
+void delete_message_queue(int msgid) {
+    if (msgctl(msgid, IPC_RMID, NULL) == -1) {
+        perror("Error deleting message queue");
+        exit(EXIT_FAILURE);
+    }
+    printf("Message queue deleted\n");
+}
 
-    pthread_join(thread,NULL);
+int main(){
+    // Assume it receives write request from LB via single queue.
+
+    int msgid = create_message_queue();
+    printf("Message id created\n");
+
+    // Main loop to handle messages
+    while (1) 
+    {
+        struct message msg;
+        // Receive message from the queue
+        msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 2, 0);
+        printf("Message read\n");    
+        pthread_t thread;
+
+        if(pthread_create(&thread,NULL,handleRequest,(void*)&msg) != 0)
+        {
+            perror("Error in creating thread");
+            exit(EXIT_FAILURE);
+        }
+
+        pthread_join(thread,NULL);
+    }
 }

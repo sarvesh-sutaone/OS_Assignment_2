@@ -78,12 +78,12 @@ int main() {
             perror("Error sending message to primary server");
             exit(EXIT_FAILURE);
             }
-            printf("Message sent to main server\n");
+            printf("Message sent to primary server\n");
         }
         else if(msg.seq_num == 3 || msg.seq_num == 4)
         {
             forward_request(msgid, &msg);
-            printf("Message sent to primary server 1 and 2\n");
+            printf("Message sent to secondary server 1 and 2\n");
         }
     }
     //delete_message_queue(msgid);

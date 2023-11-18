@@ -108,11 +108,6 @@ int main(){
     msg.op_num = operation;
     msg.mtype = 1;
     strcpy(msg.fname,graph_name);
-    if(msgsnd(msgqid,&msg,sizeof(struct message) - sizeof(long),0) == -1){
-        perror("Error in msgsnd");
-        exit(EXIT_FAILURE);
-    }
-
     if(operation == 1){ // Add new graph
         printf("Enter number of nodes of the graph: ");
         int num_nodes;
@@ -213,6 +208,13 @@ int main(){
 
         // Receieve message through message queue and delete SHM.
     }
+    
+    // Sending Message after storing in SHM.
+    if(msgsnd(msgqid,&msg,sizeof(struct message) - sizeof(long),0) == -1){
+        perror("Error in msgsnd");
+        exit(EXIT_FAILURE);
+    }
+
 
     else{
         printf("Invalid Operation");
