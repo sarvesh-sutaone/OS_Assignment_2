@@ -15,7 +15,6 @@ struct sharedData{
     int flag;
     int graph[30][30];
     int start_vertex;
-    int res[100];
     int rows;   
 };
 
@@ -203,7 +202,7 @@ void *starterFunction(void *args){
     strcpy(filename,msg->fname);
     readGraphFromFile(filename,graph,&numNodes);
     printf("%d\n",msg->seq_num);
-    int shmid = create_shm(1);
+    int shmid = create_shm(msg->seq_num);
     struct sharedData client_data;
     read_from_shared_memory(shmid,&client_data);
     int startNode = client_data.start_vertex;
@@ -221,42 +220,42 @@ void *starterFunction(void *args){
 }
 
 int main(){
-    // int ss_identifier = -1;
-    // key_t key_for_server = ftok(".",'s');
-    // // int shmid = shmget(key_for_server,sizeof(struct sharedData),0664);
-    // // delete_shm(shmid);
-    // if(key_for_server == -1){
-    //     perror("Error in ftok");
-    //     exit(EXIT_FAILURE);
-    // }
+    int ss_identifier = -1;
+    key_t key_for_server = ftok(".",'s');
+    // int shmid = shmget(key_for_server,sizeof(struct sharedData),0664);
+    // delete_shm(shmid);
+    if(key_for_server == -1){
+        perror("Error in ftok");
+        exit(EXIT_FAILURE);
+    }
 
     int msgid = create_message_queue();
     printf("Message id created\n");
     struct message msg;
-    // int shmid = shmget(key_for_server,sizeof(struct sharedData),0664);
-    msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 999, 0);
-    int shmid = create_shm(1);
-    // if(shmid == -1){
-    //     printf("This is Secondary Server 1\n");
-    //     shmid = shmget(key_for_server,sizeof(struct sharedData),0664|IPC_CREAT);
-    //     ss_identifier = 1; // First Secondary Server
-    //     msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 999, 0);
-    // }
-    // else{
-    //     printf("This is Secondary Server 2\n");
-    //     ss_identifier = 2; // Second Secondary Server
-    //     msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 998, 0);
-    // }
 
-    // pthread_t thread;
+    int shmid = shmget(key_for_server,sizeof(struct sharedData),0664);
+    
+    if(shmid == -1){
+        printf("This is Secondary Server 1\n");
+        shmid = shmget(key_for_server,sizeof(struct sharedData),0664|IPC_CREAT);
+        ss_identifier = 1; // First Secondary Server
+        msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 999, 0);
+    }
+    else{
+        printf("This is Secondary Server 2\n");
+        ss_identifier = 2; // Second Secondary Server
+        msgrcv(msgid, &msg, sizeof(struct message) - sizeof(long), 998, 0);
+    }
 
-    // if(pthread_create(&thread,NULL,starterFunction,(void*)&msg) != 0)
-    // {
-    //     perror("Error in creating thread");
-    //     exit(EXIT_FAILURE);
-    // }
+    pthread_t thread;
 
-    // pthread_join(thread,NULL);
+    if(pthread_create(&thread,NULL,starterFunction,(void*)&msg) != 0)
+    {
+        perror("Error in creating thread");
+        exit(EXIT_FAILURE);
+    }
+
+    pthread_join(thread,NULL);
     
 }
 

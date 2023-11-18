@@ -183,7 +183,7 @@ int main() {
     readGraphFromFile(filename, graph, &numNodes);
 
     // Starting node for BFS traversal, received from SHM.
-    int seq_num = 1;
+    int seq_num = 4;
     int shmid = create_shm(seq_num);
     struct sharedData client_data;
     read_from_shared_memory(shmid,&client_data);
